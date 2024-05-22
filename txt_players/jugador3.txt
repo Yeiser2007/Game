@@ -1,8 +1,0 @@
-
-MOV(UP)
-
-MOV(DOWN)
-
-MOV(LEFT)
-
-
