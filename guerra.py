@@ -8,9 +8,13 @@ info = pygame.display.Info()
 ANCHO_VENTANA, ALTO_VENTANA = info.current_w, info.current_h  # Dimensiones de la pantalla
 
 # Definir constantes
-FILAS, COLUMNAS = 7, 7  # 4 filas y 3 columnas para la tabla
-TAMANO_CELDA = min(ANCHO_VENTANA // COLUMNAS*2, ALTO_VENTANA // FILAS)  # Ajustar tamaño de celda
+# Definir constantes
+FILAS, COLUMNAS = 7, 7
+TAMANO_CELDA = min((ANCHO_VENTANA ) // COLUMNAS, (ALTO_VENTANA ) // FILAS)  # Tamaño de celda ajustado
 
+# Posicionar el tablero centrado
+MARGEN_X = (ANCHO_VENTANA - (COLUMNAS * TAMANO_CELDA)) // 2
+MARGEN_Y = (ALTO_VENTANA - (FILAS * TAMANO_CELDA)) // 2
 # Colores
 COLOR_FONDO = (255, 255, 255)
 COLOR_TEXTO = (0, 0, 0)
@@ -20,7 +24,7 @@ COLOR_RADAR = (0, 255, 0)
 # Cargar imágenes de tanques, minas y fondo del tablero
 imagen_fondo_interfaz = pygame.image.load("Imagenes/fondo.jpg")
 imagen_fondo_interfaz = pygame.transform.scale(imagen_fondo_interfaz, (ANCHO_VENTANA, ALTO_VENTANA))
-imagen_fondo_tablero = pygame.image.load("Imagenes/tablero1.png")
+imagen_fondo_tablero = pygame.image.load("Imagenes/tablero.jpeg")
 imagen_fondo_tablero = pygame.transform.scale(imagen_fondo_tablero, (COLUMNAS * TAMANO_CELDA, FILAS * TAMANO_CELDA))
 imagen_tanque_rojo = pygame.image.load("Imagenes/tanque1.png")
 imagen_tanque_verde = pygame.image.load("Imagenes/tanque2.png")
@@ -34,6 +38,16 @@ imagen_mina = pygame.transform.scale(imagen_mina, (TAMANO_CELDA, TAMANO_CELDA))
 # Cargar sonido de ganador
 pygame.mixer.init()
 sonido_ganador = pygame.mixer.Sound("audios/felicidades.mp3")
+disparo_s = pygame.mixer.Sound("audios/disp.mp3")
+radar_s = pygame.mixer.Sound("audios/radar.mp3")
+recarga_s = pygame.mixer.Sound("audios/recarga.mp3")
+mov_s = pygame.mixer.Sound("audios/giro.mp3")
+mina_s = pygame.mixer.Sound("audios/explosion.mp3")
+disp_E = pygame.mixer.Sound("audios/disp_e.mp3")
+#Leer archivos
+nombres_archivos = ["Instrucciones/tanque1.txt", "Instrucciones/tanque2.txt", "Instrucciones/tanque3.txt",
+                    "Instrucciones/tanque4.txt"]
+
 
 # Clase Tanque
 class Tanque:
@@ -43,39 +57,46 @@ class Tanque:
         self.y = y
         self.imagen_original = imagen
         self.imagen = pygame.transform.scale(imagen, (TAMANO_CELDA, TAMANO_CELDA))
-        self.direccion = random.choice(["norte", "sur", "este", "oeste"])
         self.danio_recibido = 0
-        self.vida = 100
+        self.vida = 50
         self.recargas = 0  # Contador de recargas
         self.ultimo_danio = 0  # Daño recibido en el último disparo
 
     def mover(self, direccion, minas):
         nueva_x, nueva_y = self.x, self.y
-        if direccion == "norte":
+        if direccion == "n":
             nueva_y -= 1
-        elif direccion == "sur":
+            print("se movio al n")
+        elif direccion == "s":
             nueva_y += 1
-        elif direccion == "este":
+            print("se movio al n")
+        elif direccion == "e":
             nueva_x += 1
-        elif direccion == "oeste":
+            print("se movio al n")
+        elif direccion == "o":
             nueva_x -= 1
 
         # Verificar que la nueva posición esté dentro del tablero
         if 0 <= nueva_x < COLUMNAS and 0 <= nueva_y < FILAS:
-            self.x, self.y = nueva_x, nueva_y
-            self.verificar_mina(minas)
+            # Verificar si la nueva posición está ocupada por otro tanque
+            if any(tanque.x == nueva_x and tanque.y == nueva_y for tanque in tanques):
+                print(f"Tanque {self.numero} no puede moverse a ({nueva_x}, {nueva_y}). Posición ocupada.")
+                self.vida -= 10  # Reducir la vida
+            else:
+                self.x, self.y = nueva_x, nueva_y
+                self.verificar_mina(minas)
         else:
             self.vida -= 10
 
     def disparar(self, direccion, tanques, trayectorias):
         self.girar(direccion)
-        if direccion == "norte":
+        if direccion == "n":
             trayectoria = [(self.x, y) for y in range(self.y - 1, -1, -1)]
-        elif direccion == "sur":
+        elif direccion == "s":
             trayectoria = [(self.x, y) for y in range(self.y + 1, FILAS)]
-        elif direccion == "este":
+        elif direccion == "e":
             trayectoria = [(x, self.y) for x in range(self.x + 1, COLUMNAS)]
-        elif direccion == "oeste":
+        elif direccion == "o":
             trayectoria = [(x, self.y) for x in range(self.x - 1, -1, -1)]
 
         trayectorias.append(trayectoria)
@@ -95,13 +116,13 @@ class Tanque:
             print(f"Tanque {self.numero} disparo específico inválido: valor {valor} fuera de rango")
             return
 
-        if direccion == "norte":
+        if direccion == "n":
             x, y = self.x, self.y - valor
-        elif direccion == "sur":
+        elif direccion == "s":
             x, y = self.x, self.y + valor
-        elif direccion == "este":
+        elif direccion == "e":
             x, y = self.x + valor, self.y
-        elif direccion == "oeste":
+        elif direccion == "o":
             x, y = self.x - valor, self.y
 
         if 0 <= x < COLUMNAS and 0 <= y < FILAS:
@@ -125,13 +146,13 @@ class Tanque:
         return self.vida > 0
 
     def radar(self, direccion, tanques, radar_areas):
-        if direccion == "norte":
+        if direccion == "n":
             posiciones = [(self.x, y) for y in range(self.y - 1, -1, -1)]
-        elif direccion == "sur":
+        elif direccion == "s":
             posiciones = [(self.x, y) for y in range(self.y + 1, FILAS)]
-        elif direccion == "este":
+        elif direccion == "e":
             posiciones = [(x, self.y) for x in range(self.x + 1, COLUMNAS)]
-        elif direccion == "oeste":
+        elif direccion == "o":
             posiciones = [(x, self.y) for x in range(self.x - 1, -1, -1)]
 
         radar_areas.append(posiciones)
@@ -164,19 +185,20 @@ class Tanque:
             print(f"Tanque {self.numero} ya ha usado sus 3 recargas.")
 
     def girar(self, direccion):
-        if direccion == "norte":
+        if direccion == "n":
             self.imagen = pygame.transform.rotate(self.imagen_original, 0)
-        elif direccion == "sur":
+        elif direccion == "s":
             self.imagen = pygame.transform.rotate(self.imagen_original, 180)
-        elif direccion == "este":
+        elif direccion == "e":
             self.imagen = pygame.transform.rotate(self.imagen_original, 270)
-        elif direccion == "oeste":
+        elif direccion == "o":
             self.imagen = pygame.transform.rotate(self.imagen_original, 90)
         self.imagen = pygame.transform.scale(self.imagen, (TAMANO_CELDA, TAMANO_CELDA))
 
     def verificar_mina(self, minas):
         for mina in minas:
             if self.x == mina[0] and self.y == mina[1]:
+                pygame.mixer.Sound.play(mina_s)
                 minas.remove(mina)
                 self.recibir_danio(20)
                 print(f"Tanque {self.numero} pisó una mina en ({self.x}, {self.y}). Vida restante: {self.vida}")
@@ -190,25 +212,62 @@ def generar_minas(num_minas):
             minas.append((x, y))
     return minas
 
-def dibujar_cuadricula(ventana, filas, columnas, tamano_celda, color=(255, 255, 255)):
+def leer_proxima_instruccion(archivos, indices):
+    instrucciones = []
+    for i, archivo in enumerate(archivos):
+        try:
+            instruccion = next(archivo).strip()
+            instrucciones.append((instruccion, i))  # Guardamos el índice del archivo junto con la instrucción
+            indices[i] += 1
+        except StopIteration:
+            archivo.seek(0)  # Volver al principio del archivo si ya no hay más instrucciones
+            indices[i] = 0  # Reiniciar el índice para la próxima ronda
+            instruccion = next(archivo).strip()
+            instrucciones.append((instruccion, i))  # Guardamos la primera instrucción del archivo
+    return instrucciones
+
+def separar_parametros(instruccion):
+    if '(' in instruccion:
+        comando, parametros = instruccion.split('(')
+        parametros = parametros.strip(')').split(',')
+    else:
+        comando = instruccion
+        parametros = []
+    return comando, parametros
+
+def validar_dos_parametros(instruccion):
+    comando, parametros = separar_parametros(instruccion)
+    if len(parametros) == 2:
+        print(f"La instrucción '{comando}' tiene dos parámetros: {parametros[0]} y {parametros[1]}")
+    else:
+        print(f"La instrucción '{comando}' no tiene dos parámetros")
+
+# Crear tanques y minas
+tanques = [Tanque(i, random.randint(0, COLUMNAS-1), random.randint(0, FILAS-1), imagen) for i, imagen in enumerate(imagenes_tanques)]
+minas = generar_minas(5)
+def mostrar_mensaje(ventana, mensaje):
+    fuente = pygame.font.SysFont(None, 48)
+    texto = fuente.render(mensaje, True, (255, 0, 0))
+    ventana.blit(texto, (100, 100))
+    pygame.display.flip()
+    time.sleep(2)  # Mostrar el mensaje por 2 segundos
+
+def dibujar_cuadricula(ventana, filas, columnas, tamano_celda, color=(0, 0, 0)):
     for x in range(0, columnas * tamano_celda, tamano_celda):
         pygame.draw.line(ventana, color, (x, 0), (x, filas * tamano_celda))
     for y in range(0, filas * tamano_celda, tamano_celda):
         pygame.draw.line(ventana, color, (0, y), (columnas * tamano_celda, y))
 
-# Crear tanques y minas
-tanques = [Tanque(i, random.randint(0, COLUMNAS-1), random.randint(0, FILAS-1), imagen) for i, imagen in enumerate(imagenes_tanques)]
-minas = generar_minas(5)
-
 def mostrar_tablero():
     ventana = pygame.display.set_mode((ANCHO_VENTANA, ALTO_VENTANA))
     pygame.display.set_caption("Simulador de Combate de Tanques")
-
-    instrucciones = ["avanzar", "girar", "disparar", "radar", "recargar"]
-    trayectorias = []  # Lista para almacenar trayectorias de disparos normales
-    disparos_especificos = []  # Lista para almacenar posiciones de disparos específicos
-    radar_areas = []  # Lista para almacenar áreas de radar
-
+    nombres_archivos = ["Instrucciones/tanque1.txt", "Instrucciones/tanque2.txt", "Instrucciones/tanque3.txt",
+                        "Instrucciones/tanque4.txt"]
+    archivos = [open(nombre_archivo, 'r') for nombre_archivo in nombres_archivos]
+    indices = [0] * len(nombres_archivos)
+    trayectorias = []
+    disparos_especificos = []
+    radar_areas = []
     reloj = pygame.time.Clock()
     fin_simulacion = False
 
@@ -223,78 +282,99 @@ def mostrar_tablero():
         for mina in minas:
             ventana.blit(imagen_mina, (mina[0] * TAMANO_CELDA, mina[1] * TAMANO_CELDA))
 
-        for i, tanque in enumerate(tanques):
+        instrucciones = leer_proxima_instruccion(archivos, indices)
+        if not instrucciones:
+            break
 
+        for instruccion, indice_archivo in instrucciones:
+            if instruccion is None:
+                mostrar_mensaje(ventana, f"Tanque {indice_archivo + 1} se quedó sin instrucciones")
+                continue
+
+            inst, parametros = separar_parametros(instruccion)
+            tanque = tanques[indice_archivo]
             if tanque.esta_vivo():
-                instruccion = random.choice(instrucciones)
-                if instruccion == "avanzar":
-                    direccion = random.choice(["norte", "sur", "este", "oeste"])
-                    tanque.mover(direccion, minas)
-                elif instruccion == "girar":
-                    direccion = random.choice(["norte", "sur", "este", "oeste"])
-                    tanque.girar(direccion)
-                elif instruccion == "disparar":
-                    direccion = random.choice(["norte", "sur", "este", "oeste"])
-                    tanque.disparar(direccion, tanques, trayectorias)
-                    # Eliminar la trayectoria del disparo si no hay más tanques en esa línea
-                    trayectorias = [trayectoria for trayectoria in trayectorias if any((tanque.x, tanque.y) in trayectoria for tanque in tanques)]
-                elif instruccion == "radar":
-                    direccion = random.choice(["norte", "sur", "este", "oeste"])
-                    tanque.radar(direccion, tanques, radar_areas)
-                elif instruccion == "recargar":
+                if inst == "mov":
+                    pygame.mixer.Sound.play(mov_s)
+                    for parametro in parametros:
+                        tanque.mover(parametro.strip(), minas)
+                elif inst == "recarga":
+                    pygame.mixer.Sound.play(recarga_s)
                     tanque.recargar()
+                elif inst == "rad":
+                    print(instruccion)
+                    pygame.mixer.Sound.play(radar_s)
+                    for parametro in parametros:
+                        print(f"Parámetro: {parametro.strip()}")
+                        tanque.radar(parametro.strip(), tanques, radar_areas)
+                elif inst == "dis_e":
+                    pygame.mixer.Sound.play(disp_E)
+                    par=[]
+                    for parametro in parametros:
+                        print(f"Parámetro: {parametro.strip()}")
+                        par.append(parametro.strip())
+                    print(par)
+                    tanque.disparo_especifico(par[0],int(par[1]),tanques,disparos_especificos)
+                elif inst == "dis_l":
+                    pygame.mixer.Sound.play(disparo_s)
+                    for parametro in parametros:
+                        tanque.girar(parametro.strip())
+                        tanque.disparar(parametro.strip(), tanques, trayectorias)
 
-                ventana.blit(tanque.imagen, (tanque.x * TAMANO_CELDA, tanque.y * TAMANO_CELDA))
-                dibujar_cuadricula(ventana, FILAS, COLUMNAS, TAMANO_CELDA)
-                # Mostrar la etiqueta del tanque con su identificador
+            # Redibujar el estado de todos los tanques y otros elementos del tablero
+            ventana.blit(imagen_fondo_tablero, (0, 0))
+            dibujar_cuadricula(ventana, FILAS, COLUMNAS, TAMANO_CELDA)
+            for mina in minas:
+                ventana.blit(imagen_mina, (mina[0] * TAMANO_CELDA, mina[1] * TAMANO_CELDA))
+            for t in tanques:
+                ventana.blit(t.imagen, (t.x * TAMANO_CELDA, t.y * TAMANO_CELDA))
                 fuente = pygame.font.SysFont(None, 20)
-                texto_identificador = fuente.render(f"Tanque {tanque.numero + 1}", True, COLOR_TEXTO)
-                ventana.blit(texto_identificador, ((tanque.x + 0.5) * TAMANO_CELDA - texto_identificador.get_width() // 2, (tanque.y + 0.25) * TAMANO_CELDA))
+                texto_identificador = fuente.render(f"Tanque {t.numero + 1}", True, COLOR_TEXTO)
+                ventana.blit(texto_identificador, (
+                (t.x + 0.5) * TAMANO_CELDA - texto_identificador.get_width() // 2, (t.y + 0.25) * TAMANO_CELDA))
 
-                # Dibujar las trayectorias de los disparos
-                for trayectoria in trayectorias:
-                    for (x, y) in trayectoria:
-                        pygame.draw.circle(ventana, COLOR_DISPARO, ((x + 0.5) * TAMANO_CELDA, (y + 0.5) * TAMANO_CELDA), 5)
-
-                # Dibujar las posiciones de los disparos específicos
-                for (x, y) in disparos_especificos:
+            for trayectoria in trayectorias:
+                for (x, y) in trayectoria:
                     pygame.draw.circle(ventana, COLOR_DISPARO, ((x + 0.5) * TAMANO_CELDA, (y + 0.5) * TAMANO_CELDA), 5)
+            trayectorias.clear()
 
-                # Dibujar las áreas de radar
-                for area in radar_areas:
-                    for (x, y) in area:
-                        pygame.draw.circle(ventana, COLOR_RADAR, ((x + 0.5) * TAMANO_CELDA, (y + 0.5) * TAMANO_CELDA), 5)
-                radar_areas.clear()  # Borrar las áreas de radar después de mostrarlas
+            for (x, y) in disparos_especificos:
+                pygame.draw.circle(ventana, COLOR_DISPARO, ((x + 0.5) * TAMANO_CELDA, (y + 0.5) * TAMANO_CELDA), 18)
+            disparos_especificos.clear()
 
-                # Mostrar la tabla de estado del tanque en el lado derecho de la pantalla
-                fuente = pygame.font.SysFont(None, 24)
-                y_texto = tanque.numero * 100 + 50
-                texto_estado = fuente.render(f"Tanque {tanque.numero + 1}", True, COLOR_TEXTO)
-                ventana.blit(texto_estado, (COLUMNAS * TAMANO_CELDA + 20, y_texto))
-                y_texto += 20
-                texto_instruccion = fuente.render(f"Instrucción: {instruccion}", True, COLOR_TEXTO)
-                ventana.blit(texto_instruccion, (COLUMNAS * TAMANO_CELDA + 20, y_texto))
-                y_texto += 20
-                texto_vida = fuente.render(f"Vida: {tanque.vida}", True, COLOR_TEXTO)
-                ventana.blit(texto_vida, (COLUMNAS * TAMANO_CELDA + 20, y_texto))
-                y_texto += 20
-                texto_recargas = fuente.render(f"Recargas: {tanque.recargas}", True, COLOR_TEXTO)
-                ventana.blit(texto_recargas, (COLUMNAS * TAMANO_CELDA + 20, y_texto))
+            for area in radar_areas:
+                for (x, y) in area:
+                    pygame.draw.circle(ventana, COLOR_RADAR, ((x + 0.5) * TAMANO_CELDA, (y + 0.5) * TAMANO_CELDA), 10)
+            radar_areas.clear()
 
-                # Mostrar el daño recibido en el último disparo
+            fuente = pygame.font.SysFont(None, 24)
+            for t in tanques:
+                y_texto = t.numero * 100 + 50
+                texto_estado = fuente.render(f"Tanque {t.numero + 1}", True, COLOR_TEXTO)
+                ventana.blit(texto_estado, (ANCHO_VENTANA - 200, y_texto))
                 y_texto += 20
-                texto_ultimo_danio = fuente.render(f"Daño Recibido: {tanque.ultimo_danio}", True, COLOR_TEXTO)
-                ventana.blit(texto_ultimo_danio, (COLUMNAS * TAMANO_CELDA + 20, y_texto))
+                texto_vida = fuente.render(f"Vida: {t.vida}", True, COLOR_TEXTO)
+                ventana.blit(texto_vida, (ANCHO_VENTANA - 200, y_texto))
+                y_texto += 20
+                texto_recargas = fuente.render(f"Recargas: {t.recargas}", True, COLOR_TEXTO)
+                ventana.blit(texto_recargas, (ANCHO_VENTANA - 200, y_texto))
+                y_texto += 20
+                texto_ultimo_danio = fuente.render(f"Daño Recibido: {t.ultimo_danio}", True, COLOR_TEXTO)
+                ventana.blit(texto_ultimo_danio, (ANCHO_VENTANA - 200, y_texto))
 
-        # Verificar si solo queda un tanque vivo
+            pygame.display.flip()
+            time.sleep(2)  # Pausa después de cada instrucción
+
         tanques_vivos = [tanque for tanque in tanques if tanque.esta_vivo()]
         if len(tanques_vivos) == 1:
             ganador = tanques_vivos[0]
             ventana_ganador(ganador)
             fin_simulacion = True
 
-        pygame.display.flip()
-        reloj.tick(1)
+        reloj.tick(10)  # Reducido a 10 FPS para hacerlo más lento
+
+    for archivo in archivos:
+        archivo.close()
 
     pygame.quit()
 

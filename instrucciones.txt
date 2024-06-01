@@ -1,0 +1,5 @@
+mov(n)
+dis_l(s)
+dis_e(ee)
+rad(o)
+if(n n n) then (
